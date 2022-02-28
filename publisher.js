@@ -4,7 +4,7 @@ const QueueClient = require("./queue_client");
 var message = {
   segmentID: "621b7a9a39f37e8855a5997b",
   service: {
-    name: "MSG91",
+    name: "Sendgrid",
     limits: [
       {
         name: "Minute",
@@ -25,12 +25,13 @@ var message = {
   },
   client: {
     name: "Abhinav&Co",
-    apiKey: "332347AkkjFe54vCZ35ee48ddfP1",
+    apiKey:
+      "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",
     number: "123456789",
-    email: "abhinavCo@gmail.com",
+    email: "abhinavmeenameena@gmail.com",
   },
   template: {
-    templateID: "60e187c75088fe6e696ad9ea",
+    templateID: "d-d96eda92999244679f968954bfe0cb4a",
     params: ["Agent", "Local Address"],
   },
 };
@@ -38,10 +39,14 @@ var message = {
 let producer = new QueueClient("amqp://localhost", "amqp-test");
 
 producer.waitForConnection(1000).then(() => {
-  producer.produce(JSON.stringify(message), {
-    persistent: true,
-    contentType: "application/json",
-  });
+  try {
+    producer.produce(JSON.stringify(message), {
+      persistent: true,
+      contentType: "application/json",
+    });
+  } catch (error) {
+    console.log(error);
+  }
 });
 
 console.log(message);

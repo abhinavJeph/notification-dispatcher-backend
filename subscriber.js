@@ -13,27 +13,32 @@ redisClient.connect();
 let consumer = new QueueClient("amqp://localhost", "amqp-test");
 
 consumer.waitForConnection(1000).then(() => {
-  consumer.setPrefetch(1);
-  consumer.consume(async (data) => {
-    if (data === null) {
-      return;
-    }
+  try {
+    consumer.setPrefetch(1);
+    consumer.consume(async (data) => {
+      if (data === null) {
+        return;
+      }
 
-    let mssg = JSON.parse(data.content.toString());
+      let mssg = JSON.parse(data.content.toString());
 
-    const limitHit = await checkAPILimit(mssg);
-    if (limitHit) {
-      consumer.acknowledge(data);
-      consumer.produce(JSON.stringify(mssg), {
-        persistent: true,
-        contentType: "application/json",
-      });
-    } else {
-      await workerFunction(mssg);
-      incrementAPICount(mssg);
-      consumer.acknowledge(data);
-    }
-  });
+      const limitHit = await checkAPILimit(mssg);
+      if (limitHit) {
+        consumer.acknowledge(data);
+        consumer.produce(JSON.stringify(mssg), {
+          persistent: true,
+          contentType: "application/json",
+        });
+      } else {
+        // consumer.acknowledge(data);
+        await workerFunction(mssg);
+        incrementAPICount(mssg);
+        consumer.acknowledge(data);
+      }
+    });
+  } catch (error) {
+    console.log(error);
+  }
 });
 
 const workerFunction = async (mssg) => {
@@ -76,13 +81,17 @@ const sendBulkSmsMSG91 = async (mssg) => {
     flow_id: mssg.template.templateID,
   };
 
-  return await axios.post(url, body);
+  const response = await axios.post(url, body);
+  return response;
 };
 
 const sendBulkEmailSendgrid = async (mssg) => {
   let url = process.env.SENDGRID_URL_BULK_EMAIL;
-  let headers = {
-    Authorization: mssg.client.apiKey,
+  let config = {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${mssg.client.apiKey}`,
+    },
   };
 
   const users = await getUsersFromSegmentID(mssg.segmentID);
@@ -90,21 +99,26 @@ const sendBulkEmailSendgrid = async (mssg) => {
   let data = {
     personalizations: users.map((user) => {
       return {
-        to: { email: user.email, name: user.name },
+        to: [{ email: user.email, name: user.name }],
         dynamic_template_data: {
-          subject: mssg.content.subject,
           recipient_name: user.name,
         },
+        subject: mssg.template.params[0],
       };
     }),
     from: {
       email: mssg.client.email,
       name: mssg.client.name,
     },
+    reply_to: {
+      email: mssg.client.email,
+      name: mssg.client.name,
+    },
     template_id: mssg.template.templateID,
   };
 
-  return await axios({ method: "post", url, headers, data });
+  const response = await axios.post(url, data, config);
+  return response;
 };
 
 const incrementAPICount = (mssg) => {
