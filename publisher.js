@@ -25,8 +25,7 @@ var message = {
   },
   client: {
     name: "Abhinav&Co",
-    apiKey:
-      "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",
+    apiKey: "dummy-key",
     number: "123456789",
     email: "abhinavmeenameena@gmail.com",
   },
