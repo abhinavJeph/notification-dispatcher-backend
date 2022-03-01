@@ -22,8 +22,8 @@ consumer.waitForConnection(1000).then(() => {
 
       let mssg = JSON.parse(data.content.toString());
 
-      const limitHit = await checkAPILimit(mssg);
-      if (limitHit) {
+      const overLimit = await checkAPILimit(mssg);
+      if (overLimit) {
         consumer.acknowledge(data);
         consumer.produce(JSON.stringify(mssg), {
           persistent: true,
@@ -123,25 +123,23 @@ const sendBulkEmailSendgrid = async (mssg) => {
 
 const incrementAPICount = (mssg) => {
   mssg.service.limits.forEach(async (limit) => {
-    const key = mssg.service.name + "-" + mssg.client.apiKey + "-" + limit.name;
-    var count = await redisClient.get(key);
-    count = count || 0;
-    count = parseInt(count, 10) + 1;
-    redisClient.setEx(key, limit.expiration, count);
+    await redisClient.incr(getRedisKey(mssg, limit));
   });
+};
+
+const getRedisKey = (mssg, limit) => {
+  return mssg.service.name + "-" + mssg.client.apiKey + "-" + limit.name;
 };
 
 const checkAPILimit = async (mssg) => {
   const dayLimit = 1 * 60 * 60 * 24;
 
   const checkLimit = await asyncSome(mssg.service.limits, async (limit) => {
-    const key = mssg.service.name + "-" + mssg.client.apiKey + "-" + limit.name;
-    var count = await redisClient.get(key);
-    count = count || 0;
-    const limitHit = parseInt(count, 10) >= limit.maximum;
-    if (limitHit && limit.expiration > dayLimit)
+    var count = await redisClient.incr(getRedisKey(mssg, limit));
+    const overLimit = parseInt(count, 10) > limit.maximum;
+    if (overLimit && limit.expiration > dayLimit)
       throw new Error("API Limit exceeded: " + limit.maximum);
-    return limitHit;
+    return overLimit;
   });
   return checkLimit;
 };
